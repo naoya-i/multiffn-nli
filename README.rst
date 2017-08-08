@@ -19,22 +19,21 @@ Requirements
 
 The code was only tested in Python 2.7. The current version run on tensorflow 1.2.
 
-Usage
------
-
-Training
-^^^^^^^^
+Usage: Training
+---------------
 
 Run `train.py -h` to see an explanation of its usage. A lot of hyperparameter customization is possible; but as a reference, using the MLP model on SNLI, great results can be obtained with 200 units, 0.8 dropout keep probability (i.e., 0.2 dropout), 0 l2 loss, a batch size of 32, an initial learning rate of 0.05 and Adagrad. 
 
 1. Download the data
+^^^^^^^^^^^^^^^^^^^^
 
 - https://nlp.stanford.edu/projects/snli/
   - snli_1.0.zip
 - https://nlp.stanford.edu/projects/glove/
   - glove.840B.300d.zip
 
-2. Preprocess the data:
+2. Preprocess the data
+^^^^^^^^^^^^^^^^^^^^^^
 
 ::
    DATA_DIR=/path/to/data
@@ -47,6 +46,7 @@ Run `train.py -h` to see an explanation of its usage. A lot of hyperparameter cu
 ::
 
 3. Train the model
+^^^^^^^^^^^^^^^^^^
 
 ::
    MODEL_DIR=/path/to/model_output
@@ -62,7 +62,8 @@ Run `train.py -h` to see an explanation of its usage. A lot of hyperparameter cu
      $MODEL_DIR mlp
 ::
 
-4. Evaluate
+Usage: Evaluation
+-----------------
 
 ::
    python src/evaluate.py \
@@ -71,7 +72,6 @@ Run `train.py -h` to see an explanation of its usage. A lot of hyperparameter cu
      $DATA_DIR/glove.840B.300d.npy \
      $DATA_DIR/glove.840B.300d.vocab.txt
 ::
-
 
 The train and validation data should be in the JSONL format used in the SNLI corpus. The embeddings can be given in two different ways:
 
