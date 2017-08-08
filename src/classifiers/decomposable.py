@@ -533,7 +533,7 @@ class DecomposableNLIModel(object):
 
     def train(self, session, train_dataset, valid_dataset, save_dir,
               learning_rate, num_epochs, batch_size, dropout_keep=1, l2=0,
-              clip_norm=10, report_interval=1000):
+              clip_norm=10, report_interval=1000, shuffle_by_bucket=False):
         """
         Train the model
 
@@ -567,7 +567,12 @@ class DecomposableNLIModel(object):
         smwriter = tf.summary.FileWriter(save_dir, session.graph, flush_secs=10)
 
         for i in range(num_epochs):
-            train_dataset.shuffle_data()
+            if shuffle_by_bucket:
+                train_dataset.shuffle_data_by_bucket()
+
+            else:
+                train_dataset.shuffle_data()
+                
             batch_index = 0
             accumulated_training_labels = collections.defaultdict(int)
 

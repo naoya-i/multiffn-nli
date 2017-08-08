@@ -53,6 +53,15 @@ class RTEDataset(object):
         Shuffle all data using the same random sequence.
         :return:
         """
+        shuffle_arrays(self.sentences1, self.sentences2,
+                       self.sizes1, self.sizes2, self.labels)
+
+    def shuffle_data_by_bucket(self):
+        """
+        Shuffle all data using the same random sequence based on sentence-length bucket.
+        :return:
+        """
+        
         pick = lambda cond: [list(a) for a in izip(*ifilter(lambda (_1, _2, sz1, sz2, _3): cond(sz1, sz2),
                                                             izip(self.sentences1, self.sentences2, self.sizes1, self.sizes2, self.labels)))]
         
@@ -69,9 +78,6 @@ class RTEDataset(object):
         self.sentences1, self.sentences2,\
             self.sizes1, self.sizes2, self.labels = [buc1[i]+buc2[i]+buc3[i] for i in range(5)]
         
-        #shuffle_arrays(self.sentences1, self.sentences2,
-        #               self.sizes1, self.sizes2, self.labels)
-
     def get_batch(self, from_, to):
         """
         Return an RTEDataset object with the subset of the data contained in

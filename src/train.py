@@ -67,6 +67,8 @@ if __name__ == '__main__':
                         choices=['adagrad', 'adadelta', 'adam'])
     parser.add_argument('-a', dest='additional_training',
                         help='Additional training corpus (PICKLE, JSONL or TSV)')
+    parser.add_argument('--shuffle-by-bucket', help='Shuffle the training data by bucket',
+                        action='store_true', dest='shuffle_by_bucket')
     
     args = parser.parse_args()
 
@@ -137,4 +139,4 @@ if __name__ == '__main__':
     logger.info('Starting training')
     model.train(sess, train_data, valid_data, args.save, args.rate,
                 args.num_epochs, args.batch_size, args.dropout, args.l2,
-                args.clip_norm, args.report)
+                args.clip_norm, args.report, args.shuffle_by_bucket)
