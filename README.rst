@@ -27,6 +27,52 @@ Training
 
 Run `train.py -h` to see an explanation of its usage. A lot of hyperparameter customization is possible; but as a reference, using the MLP model on SNLI, great results can be obtained with 200 units, 0.8 dropout keep probability (i.e., 0.2 dropout), 0 l2 loss, a batch size of 32, an initial learning rate of 0.05 and Adagrad. 
 
+1. Download the data
+
+- https://nlp.stanford.edu/projects/snli/
+  - snli_1.0.zip
+- https://nlp.stanford.edu/projects/glove/
+  - glove.840B.300d.zip
+
+2. Preprocess the data:
+
+::
+   DATA_DIR=/path/to/data
+
+   python src/preload_emb.py $DATA_DIR/glove.840B.300d.txt $DATA_DIR/glove.840B.300d.npy $DATA_DIR/glove.840B.300d.vocab.txt
+
+   python src/preload_corpus.py $DATA_DIR/snli_1.0_train.jsonl $DATA_DIR/snli_1.0_train.pickle
+   python src/preload_corpus.py $DATA_DIR/snli_1.0_dev.jsonl $DATA_DIR/snli_1.0_dev.pickle
+   python src/preload_corpus.py $DATA_DIR/snli_1.0_test.jsonl $DATA_DIR/snli_1.0_test.pickle
+::
+
+3. Train the model
+
+::
+   MODEL_DIR=/path/to/model_output
+
+   python src/train.py \
+     -u 200 -d 0.8 -r 0.05 --optim adagrad -e 100 \
+     --shuffle-by-bucket \
+     --vocab $DATA_DIR/glove.840B.300d.vocab.txt \
+     --report 2000 \
+     $DATA_DIR/glove.840B.300d.npy \
+     $DATA_DIR/snli_1.0_train.pickle \
+     $DATA_DIR/snli_1.0_dev.pickle \
+     $MODEL_DIR mlp
+::
+
+4. Evaluate
+
+::
+   python src/evaluate.py \
+     $MODEL_DIR \
+     $DATA_DIR/snli_1.0_test.pickle \
+     $DATA_DIR/glove.840B.300d.npy \
+     $DATA_DIR/glove.840B.300d.vocab.txt
+::
+
+
 The train and validation data should be in the JSONL format used in the SNLI corpus. The embeddings can be given in two different ways:
 
     1) A text file where each line has a word and its vector with values separated by whitespace or tabs
