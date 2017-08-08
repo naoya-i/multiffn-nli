@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 
 from __future__ import division
+from itertools import *
 
 """
 Utility functions.
@@ -52,8 +53,24 @@ class RTEDataset(object):
         Shuffle all data using the same random sequence.
         :return:
         """
-        shuffle_arrays([self.sentences1, self.sentences2,
-                        self.sizes1, self.sizes2, self.labels])
+        pick = lambda cond: [list(a) for a in izip(*ifilter(lambda (_1, _2, sz1, sz2, _3): cond(sz1, sz2),
+                                                            izip(self.sentences1, self.sentences2, self.sizes1, self.sizes2, self.labels)))]
+        
+        buc1 = pick(lambda sz1, sz2: sz1 < 20 and sz2 < 20)
+        buc2 = pick(lambda sz1, sz2: (sz1 >= 20 or sz2 >= 20) and sz1 < 50 and sz2 < 50)
+        buc3 = pick(lambda sz1, sz2: sz1 >= 50 or sz2 >= 50)
+
+        assert(len(buc1[0]+buc2[0]+buc3[0]) == self.num_items)
+        
+        shuffle_arrays(*buc1)
+        shuffle_arrays(*buc2)
+        shuffle_arrays(*buc3)
+
+        self.sentences1, self.sentences2,\
+            self.sizes1, self.sizes2, self.labels = [buc1[i]+buc2[i]+buc3[i] for i in range(5)]
+        
+        #shuffle_arrays(self.sentences1, self.sentences2,
+        #               self.sizes1, self.sizes2, self.labels)
 
     def get_batch(self, from_, to):
         """

@@ -9,8 +9,19 @@ import tensorflow as tf
 import numpy as np
 
 import utils
+import collections
+import sklearn.metrics as skm
 
 
+def get_accuracy(y_true, y_pred):
+    conv = lambda c: lambda x: 1 if x == c else 0
+    return (
+        skm.accuracy_score(y_true, y_pred),
+        skm.accuracy_score(*zip(*filter(lambda (t, p): t == 0, zip(y_true, y_pred)))),
+        skm.accuracy_score(*zip(*filter(lambda (t, p): t == 1, zip(y_true, y_pred)))),
+        skm.accuracy_score(*zip(*filter(lambda (t, p): t == 2, zip(y_true, y_pred)))),
+        )
+    
 def attention_softmax3d(values):
     """
     Performs a softmax over the attention values.
@@ -551,10 +562,14 @@ class DecomposableNLIModel(object):
         batch_counter = 0
 
         saver = tf.train.Saver(tf.trainable_variables(), max_to_keep=1)
+        
+        os.system("rm {}".format(os.path.join(save_dir, "*.tfevents.*")))
+        smwriter = tf.summary.FileWriter(save_dir, session.graph, flush_secs=10)
 
         for i in range(num_epochs):
             train_dataset.shuffle_data()
             batch_index = 0
+            accumulated_training_labels = collections.defaultdict(int)
 
             while batch_index < train_dataset.num_items:
                 batch_index2 = batch_index + batch_size
@@ -564,23 +579,48 @@ class DecomposableNLIModel(object):
 
                 ops = [self.train_op, self.loss]
                 _, loss = session.run(ops, feed_dict=feeds)
+                    
                 accumulated_loss += loss
 
                 batch_index = batch_index2
                 batch_counter += 1
-                if batch_counter % report_interval == 0:
+
+                for inst in batch.labels:
+                    accumulated_training_labels[inst] += 1
+                
+                if batch_counter % report_interval == 0:                    
                     avg_loss = accumulated_loss / report_interval
                     accumulated_loss = 0
+                    avg_labels = dict(accumulated_training_labels)
+                    accumulated_training_labels = collections.defaultdict(int)
 
                     feeds = self._create_batch_feed(valid_dataset,
                                                     0, 1, l2, 0)
 
-                    valid_loss, valid_msg = self._run_on_validation(session,
-                                                                    feeds)
+                    valid_loss, valid_ans = session.run([self.loss, self.answer], feeds)
+                    valid_accs = get_accuracy(valid_dataset.labels, valid_ans)
+                    adist = collections.defaultdict(int)
+                    
+                    for a in valid_ans:
+                        adist[a] += 1
+                        
+                    valid_msg = 'Validation loss: %f\tValidation accuracy: %f' % (
+                        valid_loss, valid_accs[0])
+                    valid_msg += '\tAnswer distribution: %s' % dict(adist)
+                    valid_msg += '\tValidation per-class accs: %.8f, %.8f, %.8f' % tuple(valid_accs[1:])
 
                     msg = '%d completed epochs, %d batches' % (i, batch_counter)
                     msg += '\tAverage training batch loss: %f' % avg_loss
+                    msg += '\tAverage training labels distribution: %s' % avg_labels
                     msg += '\t' + valid_msg
+
+                    #
+                    
+                    # Write on the tensorboard.
+                    smtrainingloss = tf.Summary()
+                    smtrainingloss.value.add(tag="training_loss", simple_value=avg_loss)
+                    smtrainingloss.value.add(tag="validation_acc", simple_value=valid_accs[0])
+                    smwriter.add_summary(smtrainingloss, batch_counter)
 
                     if valid_loss < best_loss:
                         best_loss = valid_loss
@@ -589,6 +629,8 @@ class DecomposableNLIModel(object):
 
                     logger.info(msg)
 
+        smwriter.flush()
+        
     def evaluate(self, session, dataset, return_answers, batch_size=5000):
         """
         Run the model on the given dataset
@@ -603,7 +645,7 @@ class DecomposableNLIModel(object):
             or else (loss, accuracy, answers)
         """
         if return_answers:
-            ops = [self.loss, self.accuracy, self.answer]
+            ops = [self.loss, self.accuracy, self.answer, self.logits]
         else:
             ops = [self.loss, self.accuracy]
 
@@ -613,7 +655,7 @@ class DecomposableNLIModel(object):
         # batch to take the correct average in the end
         weighted_accuracies = []
         weighted_losses = []
-        answers = []
+        answers, logits = [], []
         while i <= dataset.num_items:
             subset = dataset.get_batch(i, j)
 
@@ -628,12 +670,14 @@ class DecomposableNLIModel(object):
             weighted_accuracies.append(results[1] * subset.num_items)
             if return_answers:
                 answers.append(results[2])
+                logits.append(results[3])
 
         avg_accuracy = np.sum(weighted_accuracies) / dataset.num_items
         avg_loss = np.sum(weighted_losses) / dataset.num_items
         ret = [avg_loss, avg_accuracy]
         if return_answers:
-            all_answers = np.concatenate(answers)
+            all_answers, all_logits = np.concatenate(answers), np.concatenate(logits)
             ret.append(all_answers)
+            ret.append(all_logits)
 
         return ret

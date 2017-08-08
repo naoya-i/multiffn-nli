@@ -161,7 +161,9 @@ def load_text_embeddings(path):
             word = fields[0]
             words.append(word)
             vector = np.array([float(x) for x in fields[1:]], dtype=np.float32)
-            vectors.append(vector)
+            
+            if len(vector) == 300:
+                vectors.append(vector)
 
     embeddings = np.array(vectors, dtype=np.float32)
 
@@ -262,6 +264,11 @@ def read_corpus(filename, lowercase, language='en'):
                 tokens1 = tokenize(sent1)
                 tokens2 = tokenize(sent2)
                 useful_data.append((tokens1, tokens2, label))
+                
+        elif filename.endswith('.pickle'):
+            import cPickle
+            useful_data = cPickle.load(f)
+                    
         else:
             for line in f:
                 line = line.decode('utf-8')

@@ -15,14 +15,17 @@ import utils
 from classifiers import LSTMClassifier, MultiFeedForwardClassifier,\
     DecomposableNLIModel
 
+import numpy as np
+
+np.random.seed(19851008)
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('embeddings',
                         help='Text or numpy file with word embeddings')
-    parser.add_argument('train', help='JSONL or TSV file with training corpus')
+    parser.add_argument('train', help='PICKLE, JSONL or TSV file with training corpus')
     parser.add_argument('validation',
-                        help='JSONL or TSV file with validation corpus')
+                        help='PICKLE, JSONL or TSV file with validation corpus')
     parser.add_argument('save', help='Directory to save the model files')
     parser.add_argument('model', help='Type of architecture',
                         choices=['lstm', 'mlp'])
@@ -62,7 +65,9 @@ if __name__ == '__main__':
     parser.add_argument('--optim', help='Optimizer algorithm',
                         default='adagrad',
                         choices=['adagrad', 'adadelta', 'adam'])
-
+    parser.add_argument('-a', dest='additional_training',
+                        help='Additional training corpus (PICKLE, JSONL or TSV)')
+    
     args = parser.parse_args()
 
     utils.config_logger(args.verbose)
@@ -70,6 +75,9 @@ if __name__ == '__main__':
     logger.debug('Training with following options: %s' % ' '.join(sys.argv))
     train_pairs = ioutils.read_corpus(args.train, args.lower, args.lang)
     valid_pairs = ioutils.read_corpus(args.validation, args.lower, args.lang)
+
+    if args.additional_training != None:
+        train_pairs += ioutils.read_corpus(args.additional_training, args.lower, args.lang)
 
     # whether to generate embeddings for unknown, padding, null
     word_dict, embeddings = ioutils.load_embeddings(args.embeddings, args.vocab,
@@ -81,6 +89,8 @@ if __name__ == '__main__':
     label_dict = utils.create_label_dict(train_pairs)
     train_data = utils.create_dataset(train_pairs, word_dict, label_dict)
     valid_data = utils.create_dataset(valid_pairs, word_dict, label_dict)
+
+    logger.info('{} items in training data.'.format(train_data.num_items))
 
     ioutils.write_params(args.save, lowercase=args.lower, language=args.lang,
                          model=args.model)
@@ -95,7 +105,10 @@ if __name__ == '__main__':
                             valid_data.sentences1.shape,
                             valid_data.sentences2.shape))
 
-    sess = tf.InteractiveSession()
+    session_config = tf.ConfigProto(allow_soft_placement=True)
+    session_config.gpu_options.allow_growth = True
+    # session_config.gpu_options.per_process_gpu_memory_fraction = 0.5
+    sess = tf.InteractiveSession(config=session_config)
     logger.info('Creating model')
     vocab_size = embeddings.shape[0]
     embedding_size = embeddings.shape[1]
