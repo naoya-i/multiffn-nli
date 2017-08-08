@@ -36,6 +36,7 @@ Run `train.py -h` to see an explanation of its usage. A lot of hyperparameter cu
 ^^^^^^^^^^^^^^^^^^^^^^
 
 ::
+
    DATA_DIR=/path/to/data
 
    python src/preload_emb.py $DATA_DIR/glove.840B.300d.txt $DATA_DIR/glove.840B.300d.npy $DATA_DIR/glove.840B.300d.vocab.txt
@@ -43,12 +44,14 @@ Run `train.py -h` to see an explanation of its usage. A lot of hyperparameter cu
    python src/preload_corpus.py $DATA_DIR/snli_1.0_train.jsonl $DATA_DIR/snli_1.0_train.pickle
    python src/preload_corpus.py $DATA_DIR/snli_1.0_dev.jsonl $DATA_DIR/snli_1.0_dev.pickle
    python src/preload_corpus.py $DATA_DIR/snli_1.0_test.jsonl $DATA_DIR/snli_1.0_test.pickle
+   
 ::
 
 3. Train the model
 ^^^^^^^^^^^^^^^^^^
 
 ::
+
    MODEL_DIR=/path/to/model_output
 
    python src/train.py \
@@ -60,17 +63,20 @@ Run `train.py -h` to see an explanation of its usage. A lot of hyperparameter cu
      $DATA_DIR/snli_1.0_train.pickle \
      $DATA_DIR/snli_1.0_dev.pickle \
      $MODEL_DIR mlp
+     
 ::
 
 Usage: Evaluation
 -----------------
 
 ::
+
    python src/evaluate.py \
      $MODEL_DIR \
      $DATA_DIR/snli_1.0_test.pickle \
      $DATA_DIR/glove.840B.300d.npy \
      $DATA_DIR/glove.840B.300d.vocab.txt
+     
 ::
 
 The train and validation data should be in the JSONL format used in the SNLI corpus. The embeddings can be given in two different ways:
