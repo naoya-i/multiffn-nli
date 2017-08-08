@@ -66,6 +66,8 @@ Run `train.py -h` to see an explanation of its usage. A lot of hyperparameter cu
      
 ::
 
+These parameters should reproduce the paper's results (of the vanilla model). In my trial, the model at epoch 98 gives 86.4% accuracy on dev set and 86.1% accuracy on test set.
+
 Usage: Evaluation
 -----------------
 
