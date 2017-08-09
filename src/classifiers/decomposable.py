@@ -661,7 +661,7 @@ class DecomposableNLIModel(object):
         weighted_accuracies = []
         weighted_losses = []
         answers, logits = [], []
-        while i <= dataset.num_items:
+        while i < dataset.num_items:
             subset = dataset.get_batch(i, j)
 
             last = i + subset.num_items

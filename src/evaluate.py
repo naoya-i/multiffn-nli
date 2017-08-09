@@ -94,6 +94,7 @@ if __name__ == '__main__':
     pairs = ioutils.read_corpus(args.dataset, params['lowercase'],
                                 params['language'])
     dataset = utils.create_dataset(pairs, word_dict, label_dict)
+    
     loss, acc, answers, logits = model.evaluate(sess, dataset, True)
     print('# problems: %s' % dataset.num_items)
     print('Loss: %f' % loss)
