@@ -397,3 +397,12 @@ def normalize_embeddings(embeddings):
     # normalize embeddings
     norms = np.linalg.norm(embeddings, axis=1).reshape((-1, 1))
     return embeddings / norms
+
+def read_genres(fn):
+    ret = []
+    
+    for ln in open(fn):
+        inst = json.loads(ln.strip())
+        ret += [inst["genre"]]
+
+    return ret

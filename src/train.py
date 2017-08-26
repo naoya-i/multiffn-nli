@@ -6,6 +6,7 @@ from __future__ import division, print_function
 Script to train an RTE LSTM.
 """
 
+import os
 import sys
 import argparse
 import tensorflow as tf
@@ -69,6 +70,12 @@ if __name__ == '__main__':
                         help='Additional training corpus (PICKLE, JSONL or TSV)')
     parser.add_argument('--shuffle-by-bucket', help='Shuffle the training data by bucket',
                         action='store_true', dest='shuffle_by_bucket')
+    parser.add_argument('--report-after', help='Frequently report after this epoch.',
+                        default=0, type=int)
+    parser.add_argument('--continue', help='Continue training.',
+                        action='store_true', dest='cont')
+    parser.add_argument('--warm-start', help='Use pre-trained model.',
+                        dest='warm')
     
     args = parser.parse_args()
 
@@ -81,10 +88,27 @@ if __name__ == '__main__':
     if args.additional_training != None:
         train_pairs += ioutils.read_corpus(args.additional_training, args.lower, args.lang)
 
+    assert(not args.cont) # Not implemented yet.
+    
     # whether to generate embeddings for unknown, padding, null
-    word_dict, embeddings = ioutils.load_embeddings(args.embeddings, args.vocab,
-                                                    True, normalize=True)
-
+    is_really_cont = args.warm != None or (args.cont and os.path.exists(os.path.join(args.save, "model.meta")))
+    warmup_model = args.warm
+        
+    if is_really_cont:
+        logger.info('Found a model. Fine-tuning...')
+        
+        word_dict, embeddings = ioutils.load_embeddings(args.embeddings, args.vocab,
+                                                        generate=False, normalize=True,
+                                                        load_extra_from=warmup_model)
+        params = ioutils.load_params(warmup_model)
+        
+    else:        
+        word_dict, embeddings = ioutils.load_embeddings(args.embeddings, args.vocab,
+                                                        generate=True, normalize=True)
+        ioutils.write_params(args.save, lowercase=args.lower, language=args.lang,
+                             model=args.model)
+        ioutils.write_extra_embeddings(embeddings, args.save)
+        
     logger.info('Converting words to indices')
     # find out which labels are there in the data
     # (more flexible to different datasets)
@@ -92,12 +116,9 @@ if __name__ == '__main__':
     train_data = utils.create_dataset(train_pairs, word_dict, label_dict)
     valid_data = utils.create_dataset(valid_pairs, word_dict, label_dict)
 
-    logger.info('{} items in training data.'.format(train_data.num_items))
-
-    ioutils.write_params(args.save, lowercase=args.lower, language=args.lang,
-                         model=args.model)
     ioutils.write_label_dict(label_dict, args.save)
-    ioutils.write_extra_embeddings(embeddings, args.save)
+    
+    logger.info('{} items in training data.'.format(train_data.num_items))
 
     msg = '{} sentences have shape {} (firsts) and {} (seconds)'
     logger.debug(msg.format('Training',
@@ -115,20 +136,25 @@ if __name__ == '__main__':
     vocab_size = embeddings.shape[0]
     embedding_size = embeddings.shape[1]
 
-    if args.model == 'mlp':
-        model = MultiFeedForwardClassifier(args.num_units, 3, vocab_size,
-                                           embedding_size,
-                                           use_intra_attention=args.use_intra,
-                                           training=True,
-                                           project_input=args.no_project,
-                                           optimizer=args.optim)
-    else:
-        model = LSTMClassifier(args.num_units, 3, vocab_size,
-                               embedding_size, training=True,
-                               project_input=args.no_project,
-                               optimizer=args.optim)
+    if is_really_cont:
+        model_class = utils.get_model_class(params)
+        model, saver = model_class.load(warmup_model, sess, training=True, embeddings=embeddings)
 
-    model.initialize(sess, embeddings)
+    else:
+        if args.model == 'mlp':
+            model = MultiFeedForwardClassifier(args.num_units, 3, vocab_size,
+                                               embedding_size,
+                                               use_intra_attention=args.use_intra,
+                                               training=True,
+                                               project_input=args.no_project,
+                                               optimizer=args.optim)
+        else:
+            model = LSTMClassifier(args.num_units, 3, vocab_size,
+                                   embedding_size, training=True,
+                                   project_input=args.no_project,
+                                   optimizer=args.optim)
+
+        model.initialize(sess, embeddings)
 
     # this assertion is just for type hinting for the IDE
     assert isinstance(model, DecomposableNLIModel)
@@ -139,4 +165,6 @@ if __name__ == '__main__':
     logger.info('Starting training')
     model.train(sess, train_data, valid_data, args.save, args.rate,
                 args.num_epochs, args.batch_size, args.dropout, args.l2,
-                args.clip_norm, args.report, args.shuffle_by_bucket)
+                args.clip_norm, args.report, args.shuffle_by_bucket,
+                args.report_after, saver if is_really_cont else None,
+    )

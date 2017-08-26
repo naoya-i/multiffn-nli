@@ -452,7 +452,7 @@ class DecomposableNLIModel(object):
                    project_input=params['project_input'], training=training)
 
     @classmethod
-    def load(cls, dirname, session, training=False):
+    def load(cls, dirname, session, training=False, embeddings=None):
         """
         Load a previously saved file.
 
@@ -462,21 +462,18 @@ class DecomposableNLIModel(object):
         :return: an instance of MultiFeedForward
         :rtype: MultiFeedForwardClassifier
         """
+        tensorflow_file = os.path.join(dirname, 'model')        
         params = utils.load_parameters(dirname)
-        model = cls._init_from_load(params, training)
-
-        tensorflow_file = os.path.join(dirname, 'model')
+        model = cls._init_from_load(params, training=training)
+        
+        if training:
+            assert(embeddings is not None)
+            model.initialize(session, embeddings)
+            
         saver = tf.train.Saver(tf.trainable_variables())
         saver.restore(session, tensorflow_file)
 
-        # if training, optimizer values still have to be initialized
-        if training:
-            train_vars = [v for v in tf.global_variables()
-                          if v.name.startswith('training')]
-            init_op = tf.variables_initializer(train_vars)
-            session.run(init_op)
-
-        return model
+        return model, saver
 
     def _get_params_to_save(self):
         """
@@ -533,7 +530,9 @@ class DecomposableNLIModel(object):
 
     def train(self, session, train_dataset, valid_dataset, save_dir,
               learning_rate, num_epochs, batch_size, dropout_keep=1, l2=0,
-              clip_norm=10, report_interval=1000, shuffle_by_bucket=False):
+              clip_norm=10, report_interval=1000, shuffle_by_bucket=False,
+              report_after=0, saver=None
+    ):
         """
         Train the model
 
@@ -561,7 +560,8 @@ class DecomposableNLIModel(object):
         # batch counter doesn't reset after each epoch
         batch_counter = 0
 
-        saver = tf.train.Saver(tf.trainable_variables(), max_to_keep=1)
+        if None == saver:
+            saver = tf.train.Saver(tf.trainable_variables(), max_to_keep=1)
         
         os.system("rm {}".format(os.path.join(save_dir, "*.tfevents.*")))
         smwriter = tf.summary.FileWriter(save_dir, session.graph, flush_secs=10)
@@ -575,6 +575,7 @@ class DecomposableNLIModel(object):
                 
             batch_index = 0
             accumulated_training_labels = collections.defaultdict(int)
+            is_first_valid = True
 
             while batch_index < train_dataset.num_items:
                 batch_index2 = batch_index + batch_size
@@ -599,39 +600,43 @@ class DecomposableNLIModel(object):
                     avg_labels = dict(accumulated_training_labels)
                     accumulated_training_labels = collections.defaultdict(int)
 
-                    feeds = self._create_batch_feed(valid_dataset,
-                                                    0, 1, l2, 0)
-
-                    valid_loss, valid_ans = session.run([self.loss, self.answer], feeds)
-                    valid_accs = get_accuracy(valid_dataset.labels, valid_ans)
-                    adist = collections.defaultdict(int)
+                    # For tensorboard.
+                    smtrainingloss = tf.Summary()
+                    smtrainingloss.value.add(tag="training_loss", simple_value=avg_loss)
                     
-                    for a in valid_ans:
-                        adist[a] += 1
-                        
-                    valid_msg = 'Validation loss: %f\tValidation accuracy: %f' % (
-                        valid_loss, valid_accs[0])
-                    valid_msg += '\tAnswer distribution: %s' % dict(adist)
-                    valid_msg += '\tValidation per-class accs: %.8f, %.8f, %.8f' % tuple(valid_accs[1:])
-
                     msg = '%d completed epochs, %d batches' % (i, batch_counter)
                     msg += '\tAverage training batch loss: %f' % avg_loss
                     msg += '\tAverage training labels distribution: %s' % avg_labels
-                    msg += '\t' + valid_msg
 
-                    #
+                    if is_first_valid or i >= report_after:
+                        is_first_valid = False
+                        feeds = self._create_batch_feed(valid_dataset,
+                                                        0, 1, l2, 0)
+
+                        valid_loss, valid_ans = session.run([self.loss, self.answer], feeds)
+                        valid_accs = get_accuracy(valid_dataset.labels, valid_ans)
+                        adist = collections.defaultdict(int)
+
+                        for a in valid_ans:
+                            adist[a] += 1
+
+                        valid_msg = 'Validation loss: %f\tValidation accuracy: %f' % (
+                            valid_loss, valid_accs[0])
+                        valid_msg += '\tAnswer distribution: %s' % dict(adist)
+                        valid_msg += '\tValidation per-class accs: %.8f, %.8f, %.8f' % tuple(valid_accs[1:])
+
+                        msg += '\t' + valid_msg
+
+                        if valid_loss < best_loss:
+                            best_loss = valid_loss
+                            self.save(save_dir, session, saver)
+                            msg += '\t(saved model)'
+
+                        smtrainingloss.value.add(tag="validation_acc", simple_value=valid_accs[0])
                     
                     # Write on the tensorboard.
-                    smtrainingloss = tf.Summary()
-                    smtrainingloss.value.add(tag="training_loss", simple_value=avg_loss)
-                    smtrainingloss.value.add(tag="validation_acc", simple_value=valid_accs[0])
                     smwriter.add_summary(smtrainingloss, batch_counter)
-
-                    if valid_loss < best_loss:
-                        best_loss = valid_loss
-                        self.save(save_dir, session, saver)
-                        msg += '\t(saved model)'
-
+                            
                     logger.info(msg)
 
         smwriter.flush()
